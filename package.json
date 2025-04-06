@@ -23,7 +23,15 @@
       "dummy"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {
+          "characterRegex": "[0-9]",
+          "type": "font",
+          "name": "NEONEON_FONT_42",
+          "file": "Neoneon-3zaD6.ttf",
+          "__COMMENT__": "Neoneon font designed by Bakoom Studio. Retreived from https://www.fontspace.com/neoneon-font-f44430"
+        }
+      ]
     }
   }
 }

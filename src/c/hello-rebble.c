@@ -2,8 +2,8 @@
 
 #define BUFFER_LEN (100)
 #define DEBUG_BBOX (false)
-#define DEBUG_GRID (true)
-#define DEBUG_TIME (true)
+#define DEBUG_GRID (false)
+#define DEBUG_TIME (false)
 #define INCLUDE_DATE (true)
 #define INCLUDE_TICKS (true)
 
@@ -146,14 +146,6 @@ static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_len
   gpath_move_to(s_arrow, center);
   gpath_draw_filled(ctx, s_arrow);
   gpath_draw_outline(ctx, s_arrow);
-
-  // centerline on the hand to make it prettier
-  graphics_context_set_stroke_width(ctx, 3);
-  graphics_draw_line(
-    ctx,
-    cartesian_from_polar(center, hand_length / 10, minute_deg),
-    cartesian_from_polar(center, 9 * hand_length / 10, minute_deg)
-  );
 }
 
 static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, struct tm* now) {
@@ -193,7 +185,7 @@ static void update_layer(Layer* layer, GContext* ctx) {
   if (INCLUDE_DATE) {
     draw_date(ctx, bounds, visible_circle_radius, now);
   }
-  draw_hand(ctx, center, minute_deg, hand_length, hand_width);
+  draw_hand(ctx, center, minute_deg, hand_length);
 }
 
 static void window_load(Window* window) {

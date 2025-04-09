@@ -7,9 +7,19 @@
 #define INCLUDE_DATE (true)
 #define INCLUDE_TICKS (true)
 
+static const GPathInfo ARROW_POINTS = {
+  3,
+  (GPoint []) {
+    { -10, 0},
+    { 0, 20 },
+    { 10, 0 },
+  }
+};
+
 static Window* s_window;
 static Layer* s_layer;
 static char s_buffer[BUFFER_LEN];
+static GPath* s_arrow;
 
 static void fast_forward_time(struct tm* now) {
   now->tm_min = now->tm_sec;           /* Minutes. [0-59] */
@@ -181,6 +191,7 @@ static void init(void) {
     .unload = window_unload,
   });
   window_stack_push(s_window, true);
+  s_arrow = gpath_create(&ARROW_POINTS);
   tick_timer_service_subscribe(DEBUG_TIME ? SECOND_UNIT : MINUTE_UNIT, tick_handler);
 }
 

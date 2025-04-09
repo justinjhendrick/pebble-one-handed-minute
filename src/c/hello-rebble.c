@@ -55,15 +55,14 @@ static GRect rect_from_midpoint(GPoint midpoint, GSize size) {
 }
 
 static void format_hour(struct tm* now) {
-  if (clock_is_24h_style()) {
-    strftime(s_buffer, BUFFER_LEN, "%H", now);
-  } else {
-    int hour = now->tm_hour % 12;
+  int hour = now->tm_hour;
+  if (!clock_is_24h_style()) {
+    hour = now->tm_hour % 12;
     if (hour == 0) {
       hour = 12;
     }
-    snprintf(s_buffer, BUFFER_LEN, "%d", hour);
   }
+  snprintf(s_buffer, BUFFER_LEN, "%d", hour);
 }
 
 static void format_day_of_week(struct tm* now) {
@@ -124,13 +123,13 @@ static void change_arrow_length(int w, int h) {
   ARROW_POINTS.points[0].y = 0;
 
   ARROW_POINTS.points[1].x = w / 2;
-  ARROW_POINTS.points[1].y = -h * 8 / 10;
+  ARROW_POINTS.points[1].y = -h * 7 / 10;
 
   ARROW_POINTS.points[2].x = 0;
   ARROW_POINTS.points[2].y = -h;
 
   ARROW_POINTS.points[3].x = -w / 2;
-  ARROW_POINTS.points[3].y = -h * 8 / 10;
+  ARROW_POINTS.points[3].y = -h * 7 / 10;
 
   ARROW_POINTS.points[4].x = -w / 2;
   ARROW_POINTS.points[4].y = 0;
@@ -138,6 +137,7 @@ static void change_arrow_length(int w, int h) {
 
 static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_length) {
   int hand_width = 8;
+  // Black stroke makes it easier to see when overlapping tick
   graphics_context_set_stroke_color(ctx, GColorBlack);
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_context_set_stroke_width(ctx, 1);
@@ -146,6 +146,8 @@ static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_len
   gpath_move_to(s_arrow, center);
   gpath_draw_filled(ctx, s_arrow);
   gpath_draw_outline(ctx, s_arrow);
+  // Circle at the base to smooth out the rotation
+  graphics_fill_circle(ctx, center, 3);
 }
 
 static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, struct tm* now) {
@@ -172,8 +174,8 @@ static void update_layer(Layer* layer, GContext* ctx) {
   if (DEBUG_GRID) {
     draw_grid(ctx, bounds);
   }
-  int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2 - 1;
-  GPoint center = GPoint(visible_circle_radius, visible_circle_radius);
+  int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2 - 2;
+  GPoint center = GPoint(visible_circle_radius + 1, visible_circle_radius + 1);
   int hand_length = visible_circle_radius - 1;
   int minute = now->tm_min;
   int minute_deg = 360 * minute / 60;

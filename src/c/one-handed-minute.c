@@ -9,6 +9,7 @@
 
 static const GPathInfo ARROW_POINTS = {
   .num_points = 5,
+  // points will be filled by change_arrow_size
   .points = (GPoint []) {
     {0, 0},
     {0, 0},
@@ -118,7 +119,7 @@ static void draw_hour(GContext* ctx, GPoint center, int minute_deg, int visible_
   graphics_draw_text(ctx, s_buffer, hour_font, hour_bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
 }
 
-static void change_arrow_length(int w, int h) {
+static void change_arrow_size(int w, int h) {
   ARROW_POINTS.points[0].x = w / 2;
   ARROW_POINTS.points[0].y = 0;
 
@@ -141,7 +142,7 @@ static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_len
   graphics_context_set_stroke_color(ctx, GColorBlack);
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_context_set_stroke_width(ctx, 1);
-  change_arrow_length(hand_width, hand_length);
+  change_arrow_size(hand_width, hand_length);
   gpath_rotate_to(s_arrow, DEG_TO_TRIGANGLE(minute_deg));
   gpath_move_to(s_arrow, center);
   gpath_draw_filled(ctx, s_arrow);
@@ -153,8 +154,8 @@ static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_len
 static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, struct tm* now) {
   GFont date_font = fonts_get_system_font(FONT_KEY_GOTHIC_24);
   GRect date_bbox;
-  date_bbox.origin = GPoint(0, 2 * visible_circle_radius - 8);
-  date_bbox.size = GSize(bounds.size.w, bounds.size.h - date_bbox.origin.y);
+  date_bbox.origin = GPoint(2, 2 * visible_circle_radius - 8);
+  date_bbox.size = GSize(bounds.size.w - 4, bounds.size.h - date_bbox.origin.y);
   if (DEBUG_BBOX) {
     graphics_draw_rect(ctx, date_bbox);
   }
@@ -176,7 +177,7 @@ static void update_layer(Layer* layer, GContext* ctx) {
   }
   int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2 - 2;
   GPoint center = GPoint(visible_circle_radius + 1, visible_circle_radius + 1);
-  int hand_length = visible_circle_radius - 1;
+  int hand_length = visible_circle_radius - 2;
   int minute = now->tm_min;
   int minute_deg = 360 * minute / 60;
 

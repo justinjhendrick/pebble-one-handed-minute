@@ -8,11 +8,13 @@
 #define INCLUDE_TICKS (true)
 
 static const GPathInfo ARROW_POINTS = {
-  3,
-  (GPoint []) {
-    { -10, 0},
-    { 0, 20 },
-    { 10, 0 },
+  .num_points = 5,
+  .points = (GPoint []) {
+    {0, 0},
+    {0, 0},
+    {0, 0},
+    {0, 0},
+    {0, 0},
   }
 };
 
@@ -81,25 +83,25 @@ static void draw_grid(GContext* ctx, GRect bounds) {
   }
 }
     
-static void draw_ticks(GContext* ctx, GPoint center, int ref_tick_length, int hand_length) {
+static void draw_ticks(GContext* ctx, GPoint center, int visible_circle_radius) {
   graphics_context_set_fill_color(ctx, GColorClear);
   graphics_context_set_stroke_color(ctx, GColorWhite);
   graphics_context_set_stroke_width(ctx, 1);
   for (int16_t tick_minute = 0; tick_minute < 60; tick_minute += 1) {
     int tick_deg = tick_minute * 360 / 60;
-    GPoint minute_tick_outer = cartesian_from_polar(center, hand_length, tick_deg);
+    GPoint minute_tick_outer = cartesian_from_polar(center, visible_circle_radius, tick_deg);
     int tick_length = 1;
     if (tick_minute % 15 == 0) {
       graphics_context_set_stroke_width(ctx, 3);
-      tick_length = 2 * ref_tick_length;
+      tick_length = 2 * visible_circle_radius / 10;
     } else if (tick_minute % 5 == 0) {
       graphics_context_set_stroke_width(ctx, 1);
-      tick_length = ref_tick_length;
+      tick_length = visible_circle_radius / 10;
     } else {
       graphics_draw_pixel(ctx, minute_tick_outer);
       continue;
     }
-    GPoint minute_tick_inner = cartesian_from_polar(center, hand_length - tick_length, tick_deg);
+    GPoint minute_tick_inner = cartesian_from_polar(center, visible_circle_radius - tick_length, tick_deg);
     graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
   }
 }
@@ -117,13 +119,41 @@ static void draw_hour(GContext* ctx, GPoint center, int minute_deg, int visible_
   graphics_draw_text(ctx, s_buffer, hour_font, hour_bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
 }
 
-static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_length, int hand_width) {
-  // draw minute hand
-  graphics_context_set_stroke_color(ctx, GColorWhite);
+static void change_arrow_length(int w, int h) {
+  ARROW_POINTS.points[0].x = w / 2;
+  ARROW_POINTS.points[0].y = 0;
+
+  ARROW_POINTS.points[1].x = w / 2;
+  ARROW_POINTS.points[1].y = -h * 8 / 10;
+
+  ARROW_POINTS.points[2].x = 0;
+  ARROW_POINTS.points[2].y = -h;
+
+  ARROW_POINTS.points[3].x = -w / 2;
+  ARROW_POINTS.points[3].y = -h * 8 / 10;
+
+  ARROW_POINTS.points[4].x = -w / 2;
+  ARROW_POINTS.points[4].y = 0;
+}
+
+static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_length) {
+  int hand_width = 8;
+  graphics_context_set_stroke_color(ctx, GColorBlack);
   graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_context_set_stroke_width(ctx, hand_width);
-  GPoint hand_tip = cartesian_from_polar(center, hand_length, minute_deg);
-  graphics_draw_line(ctx, center, hand_tip);
+  graphics_context_set_stroke_width(ctx, 1);
+  change_arrow_length(hand_width, hand_length);
+  gpath_rotate_to(s_arrow, DEG_TO_TRIGANGLE(minute_deg));
+  gpath_move_to(s_arrow, center);
+  gpath_draw_filled(ctx, s_arrow);
+  gpath_draw_outline(ctx, s_arrow);
+
+  // centerline on the hand to make it prettier
+  graphics_context_set_stroke_width(ctx, 3);
+  graphics_draw_line(
+    ctx,
+    cartesian_from_polar(center, hand_length / 10, minute_deg),
+    cartesian_from_polar(center, 9 * hand_length / 10, minute_deg)
+  );
 }
 
 static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, struct tm* now) {
@@ -146,25 +176,24 @@ static void update_layer(Layer* layer, GContext* ctx) {
   if (DEBUG_TIME) {
     fast_forward_time(now);
   }
-  int hand_width = 5;
   GRect bounds = layer_get_bounds(layer);
   if (DEBUG_GRID) {
     draw_grid(ctx, bounds);
   }
   int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2 - 1;
   GPoint center = GPoint(visible_circle_radius, visible_circle_radius);
-  int hand_length = visible_circle_radius - hand_width / 2;
+  int hand_length = visible_circle_radius - 1;
   int minute = now->tm_min;
   int minute_deg = 360 * minute / 60;
 
-  draw_hand(ctx, center, minute_deg, hand_length, hand_width);
   if (INCLUDE_TICKS) {
-    draw_ticks(ctx, center, visible_circle_radius / 10, hand_length);
+    draw_ticks(ctx, center, visible_circle_radius);
   }
   draw_hour(ctx, center, minute_deg, visible_circle_radius, now);
   if (INCLUDE_DATE) {
     draw_date(ctx, bounds, visible_circle_radius, now);
   }
+  draw_hand(ctx, center, minute_deg, hand_length, hand_width);
 }
 
 static void window_load(Window* window) {

@@ -1,8 +1,11 @@
 #include <pebble.h>
 
-#define BUFFER_LEN (20)
+#define BUFFER_LEN (100)
 #define DEBUG_BBOX (false)
+#define DEBUG_GRID (false)
 #define DEBUG_TIME (false)
+#define INCLUDE_DATE (true)
+#define INCLUDE_MINUTE_TICKS (true)
 
 static Window* s_window;
 static Layer* s_layer;
@@ -44,18 +47,37 @@ static void format_date(struct tm* now) {
 }
 
 static bool is_tall_enough_for_date(GRect bounds, int32_t visible_circle_radius, int32_t font_height) {
-  return bounds.size.h - visible_circle_radius * 2 > font_height;
+  return INCLUDE_DATE && (bounds.size.h - visible_circle_radius * 2 > font_height);
+}
+
+static void draw_grid(GContext* ctx, GRect bounds) {
+  graphics_context_set_stroke_color(ctx, GColorDarkGray);
+  for (int x = 0; x <= bounds.size.w; x += 10) {
+    for (int y = 0; y <= bounds.size.h; y += 10) {
+      graphics_draw_pixel(ctx, GPoint(x, y));
+    }
+  }
+}
+
+static void fast_forward_time(struct tm* now) {
+  now->tm_min = now->tm_sec;           /* Minutes. [0-59] */
+  now->tm_hour = now->tm_sec % 24;     /* Hours.  [0-23] */
+  now->tm_mday = now->tm_sec % 31 + 1; /* Day. [1-31] */
+  now->tm_mon = now->tm_sec % 12;      /* Month. [0-11] */
+  now->tm_wday = now->tm_sec % 7;      /* Day of week. [0-6] */
 }
 
 static void update_layer(Layer* layer, GContext* ctx) {
   time_t temp = time(NULL);
   struct tm* now = localtime(&temp);
   if (DEBUG_TIME) {
-    now->tm_min = now->tm_sec;
-    now->tm_hour = now->tm_sec % 24;
+    fast_forward_time(now);
   }
   int32_t hand_width = 5;
   GRect bounds = layer_get_bounds(layer);
+  if (DEBUG_GRID) {
+    draw_grid(ctx, bounds);
+  }
   int32_t visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2 - 1;
   int32_t date_font_height = 18;
   bool tall_enough_for_date = is_tall_enough_for_date(bounds, visible_circle_radius, date_font_height);
@@ -88,22 +110,24 @@ static void update_layer(Layer* layer, GContext* ctx) {
   }
 
   // draw analog face ticks
-  for (int16_t tick_minute = 0; tick_minute < 60; tick_minute += 1) {
-    graphics_context_set_stroke_width(ctx, 1);
-    int32_t tick_deg = tick_minute * 360 / 60;
-    GPoint minute_tick_outer = cartesian_from_polar(center, minute_hand_length, tick_deg);
-    int32_t tick_length = 1;
-    if (tick_minute % 15 == 0) {
-      graphics_context_set_stroke_width(ctx, 3);
-      tick_length = 2 * visible_circle_radius / 10;
-    } else if (tick_minute % 5 == 0) {
-      tick_length = visible_circle_radius / 10;
-    } else {
-      graphics_draw_pixel(ctx, minute_tick_outer);
-      continue;
+  if (INCLUDE_MINUTE_TICKS) {
+    for (int16_t tick_minute = 0; tick_minute < 60; tick_minute += 1) {
+      int32_t tick_deg = tick_minute * 360 / 60;
+      GPoint minute_tick_outer = cartesian_from_polar(center, minute_hand_length, tick_deg);
+      int32_t tick_length = 1;
+      if (tick_minute % 15 == 0) {
+        graphics_context_set_stroke_width(ctx, 3);
+        tick_length = 2 * visible_circle_radius / 10;
+      } else if (tick_minute % 5 == 0) {
+        graphics_context_set_stroke_width(ctx, 1);
+        tick_length = visible_circle_radius / 10;
+      } else {
+        graphics_draw_pixel(ctx, minute_tick_outer);
+        continue;
+      }
+      GPoint minute_tick_inner = cartesian_from_polar(center, minute_hand_length - tick_length, tick_deg);
+      graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
     }
-    GPoint minute_tick_inner = cartesian_from_polar(center, minute_hand_length - tick_length, tick_deg);
-    graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
   }
 
   GSize hour_bbox_size = GSize(40, 40);

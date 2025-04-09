@@ -2,11 +2,11 @@
   "name": "one-handed-minute",
   "author": "justinjhendrick",
   "version": "1.0.0",
-  "keywords": ["pebble-app"],
-  "private": true,
+  "keywords": ["pebble-watchface", "analog", "one-handed", "minimalist"],
+  "private": false,
   "dependencies": {},
   "pebble": {
-    "displayName": "hello-rebble",
+    "displayName": "one-handed-minute",
     "uuid": "26d8ac4b-a204-44d6-ac4b-e51843822ab4",
     "sdkVersion": "3",
     "enableMultiJS": true,
@@ -20,9 +20,7 @@
     "watchapp": {
       "watchface": true
     },
-    "messageKeys": [
-      "dummy"
-    ],
+    "messageKeys": [],
     "resources": {
       "media": []
     }

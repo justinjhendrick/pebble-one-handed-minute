@@ -2,23 +2,31 @@
 
 #define BUFFER_LEN (100)
 #define DEBUG_BBOX (false)
-#define DEBUG_GRID (false)
-#define DEBUG_TIME (false)
+#define DEBUG_GRID (true)
+#define DEBUG_TIME (true)
 #define INCLUDE_DATE (true)
-#define INCLUDE_MINUTE_TICKS (true)
+#define INCLUDE_TICKS (true)
 
 static Window* s_window;
 static Layer* s_layer;
 static char s_buffer[BUFFER_LEN];
 
-static int32_t min(int32_t a, int32_t b) {
+static void fast_forward_time(struct tm* now) {
+  now->tm_min = now->tm_sec;           /* Minutes. [0-59] */
+  now->tm_hour = now->tm_sec % 24;     /* Hours.  [0-23] */
+  now->tm_mday = now->tm_sec % 31 + 1; /* Day. [1-31] */
+  now->tm_mon = now->tm_sec % 12;      /* Month. [0-11] */
+  now->tm_wday = now->tm_sec % 7;      /* Day of week. [0-6] */
+}
+
+static int min(int a, int b) {
   if (a < b) {
     return a;
   }
   return b;
 }
 
-static GPoint cartesian_from_polar(GPoint center, int32_t radius, int32_t angle_deg) {
+static GPoint cartesian_from_polar(GPoint center, int radius, int angle_deg) {
   GPoint ret = {
     .x = (int16_t)(sin_lookup(DEG_TO_TRIGANGLE(angle_deg)) * radius / TRIG_MAX_RATIO) + center.x,
     .y = (int16_t)(-cos_lookup(DEG_TO_TRIGANGLE(angle_deg)) * radius / TRIG_MAX_RATIO) + center.y,
@@ -35,19 +43,23 @@ static GRect rect_from_midpoint(GPoint midpoint, GSize size) {
 }
 
 static void format_hour(struct tm* now) {
-  int hour = now->tm_hour % 12;
-  if (hour == 0) {
-    hour = 12;
+  if (clock_is_24h_style()) {
+    strftime(s_buffer, BUFFER_LEN, "%H", now);
+  } else {
+    int hour = now->tm_hour % 12;
+    if (hour == 0) {
+      hour = 12;
+    }
+    snprintf(s_buffer, BUFFER_LEN, "%d", hour);
   }
-  snprintf(s_buffer, BUFFER_LEN, "%d", hour);
 }
 
-static void format_date(struct tm* now) {
-  strftime(s_buffer, BUFFER_LEN, "%A %B %e", now);
+static void format_day_of_week(struct tm* now) {
+  strftime(s_buffer, BUFFER_LEN, "%a", now);
 }
 
-static bool is_tall_enough_for_date(GRect bounds, int32_t visible_circle_radius, int32_t font_height) {
-  return INCLUDE_DATE && (bounds.size.h - visible_circle_radius * 2 > font_height);
+static void format_day_and_month(struct tm* now) {
+  strftime(s_buffer, BUFFER_LEN, "%b %e", now);
 }
 
 static void draw_grid(GContext* ctx, GRect bounds) {
@@ -58,13 +70,64 @@ static void draw_grid(GContext* ctx, GRect bounds) {
     }
   }
 }
+    
+static void draw_ticks(GContext* ctx, GPoint center, int ref_tick_length, int hand_length) {
+  graphics_context_set_fill_color(ctx, GColorClear);
+  graphics_context_set_stroke_color(ctx, GColorWhite);
+  graphics_context_set_stroke_width(ctx, 1);
+  for (int16_t tick_minute = 0; tick_minute < 60; tick_minute += 1) {
+    int tick_deg = tick_minute * 360 / 60;
+    GPoint minute_tick_outer = cartesian_from_polar(center, hand_length, tick_deg);
+    int tick_length = 1;
+    if (tick_minute % 15 == 0) {
+      graphics_context_set_stroke_width(ctx, 3);
+      tick_length = 2 * ref_tick_length;
+    } else if (tick_minute % 5 == 0) {
+      graphics_context_set_stroke_width(ctx, 1);
+      tick_length = ref_tick_length;
+    } else {
+      graphics_draw_pixel(ctx, minute_tick_outer);
+      continue;
+    }
+    GPoint minute_tick_inner = cartesian_from_polar(center, hand_length - tick_length, tick_deg);
+    graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
+  }
+}
 
-static void fast_forward_time(struct tm* now) {
-  now->tm_min = now->tm_sec;           /* Minutes. [0-59] */
-  now->tm_hour = now->tm_sec % 24;     /* Hours.  [0-23] */
-  now->tm_mday = now->tm_sec % 31 + 1; /* Day. [1-31] */
-  now->tm_mon = now->tm_sec % 12;      /* Month. [0-11] */
-  now->tm_wday = now->tm_sec % 7;      /* Day of week. [0-6] */
+static void draw_hour(GContext* ctx, GPoint center, int minute_deg, int visible_circle_radius, struct tm* now) {
+  GSize hour_bbox_size = GSize(80, 50);
+  int inverted_minute_deg = 180 + minute_deg;
+  GPoint hour_bbox_midpoint = cartesian_from_polar(center, visible_circle_radius / 2 - 5, inverted_minute_deg);
+  GRect hour_bbox = rect_from_midpoint(hour_bbox_midpoint, hour_bbox_size);
+  GFont hour_font = fonts_get_system_font(FONT_KEY_BITHAM_42_LIGHT);
+  if (DEBUG_BBOX) {
+    graphics_draw_rect(ctx, hour_bbox);
+  }
+  format_hour(now);
+  graphics_draw_text(ctx, s_buffer, hour_font, hour_bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
+}
+
+static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_length, int hand_width) {
+  // draw minute hand
+  graphics_context_set_stroke_color(ctx, GColorWhite);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_context_set_stroke_width(ctx, hand_width);
+  GPoint hand_tip = cartesian_from_polar(center, hand_length, minute_deg);
+  graphics_draw_line(ctx, center, hand_tip);
+}
+
+static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, struct tm* now) {
+  GFont date_font = fonts_get_system_font(FONT_KEY_GOTHIC_24);
+  GRect date_bbox;
+  date_bbox.origin = GPoint(0, 2 * visible_circle_radius - 8);
+  date_bbox.size = GSize(bounds.size.w, bounds.size.h - date_bbox.origin.y);
+  if (DEBUG_BBOX) {
+    graphics_draw_rect(ctx, date_bbox);
+  }
+  format_day_of_week(now);
+  graphics_draw_text(ctx, s_buffer, date_font, date_bbox, GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+  format_day_and_month(now);
+  graphics_draw_text(ctx, s_buffer, date_font, date_bbox, GTextOverflowModeFill, GTextAlignmentRight, NULL);
 }
 
 static void update_layer(Layer* layer, GContext* ctx) {
@@ -73,86 +136,26 @@ static void update_layer(Layer* layer, GContext* ctx) {
   if (DEBUG_TIME) {
     fast_forward_time(now);
   }
-  int32_t hand_width = 5;
+  int hand_width = 5;
   GRect bounds = layer_get_bounds(layer);
   if (DEBUG_GRID) {
     draw_grid(ctx, bounds);
   }
-  int32_t visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2 - 1;
-  int32_t date_font_height = 18;
-  bool tall_enough_for_date = is_tall_enough_for_date(bounds, visible_circle_radius, date_font_height);
-  GPoint center;
-  if (tall_enough_for_date) {
-    center = GPoint(visible_circle_radius, visible_circle_radius);
-  } else {
-    center = grect_center_point(&bounds);
-  }
-  int32_t minute_hand_length = visible_circle_radius - hand_width / 2;
+  int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2 - 1;
+  GPoint center = GPoint(visible_circle_radius, visible_circle_radius);
+  int hand_length = visible_circle_radius - hand_width / 2;
   int minute = now->tm_min;
-  int32_t minute_deg = 360 * minute / 60;
-  GPoint minute_hand_tip = cartesian_from_polar(center, minute_hand_length, minute_deg);
+  int minute_deg = 360 * minute / 60;
 
-  // global graphics settings
-  graphics_context_set_antialiased(ctx, true);
-
-  // draw minute hand
-  graphics_context_set_stroke_color(ctx, GColorWhite);
-  graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_context_set_stroke_width(ctx, hand_width);
-  graphics_draw_line(ctx, center, minute_hand_tip);
-
-  // draw analog face circular edge
-  graphics_context_set_fill_color(ctx, GColorClear);
-  graphics_context_set_stroke_color(ctx, GColorWhite);
-  graphics_context_set_stroke_width(ctx, 1);
-  if (DEBUG_BBOX) {
-    graphics_draw_circle(ctx, center, visible_circle_radius);
+  draw_hand(ctx, center, minute_deg, hand_length, hand_width);
+  if (INCLUDE_TICKS) {
+    draw_ticks(ctx, center, visible_circle_radius / 10, hand_length);
   }
-
-  // draw analog face ticks
-  if (INCLUDE_MINUTE_TICKS) {
-    for (int16_t tick_minute = 0; tick_minute < 60; tick_minute += 1) {
-      int32_t tick_deg = tick_minute * 360 / 60;
-      GPoint minute_tick_outer = cartesian_from_polar(center, minute_hand_length, tick_deg);
-      int32_t tick_length = 1;
-      if (tick_minute % 15 == 0) {
-        graphics_context_set_stroke_width(ctx, 3);
-        tick_length = 2 * visible_circle_radius / 10;
-      } else if (tick_minute % 5 == 0) {
-        graphics_context_set_stroke_width(ctx, 1);
-        tick_length = visible_circle_radius / 10;
-      } else {
-        graphics_draw_pixel(ctx, minute_tick_outer);
-        continue;
-      }
-      GPoint minute_tick_inner = cartesian_from_polar(center, minute_hand_length - tick_length, tick_deg);
-      graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
-    }
-  }
-
-  GSize hour_bbox_size = GSize(40, 40);
-  int32_t inverted_minute_deg = 180 + minute_deg;
-  GPoint hour_bbox_midpoint = cartesian_from_polar(center, hour_bbox_size.w / 2, inverted_minute_deg);
-  GRect hour_bbox = rect_from_midpoint(hour_bbox_midpoint, hour_bbox_size);
-  GFont hour_font = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
-  if (DEBUG_BBOX) {
-    graphics_draw_rect(ctx, hour_bbox);
-  }
-  format_hour(now);
-  graphics_draw_text(ctx, s_buffer, hour_font, hour_bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
-
-  // date on the bottom
-  if (tall_enough_for_date) {
-    GFont date_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
-    GRect date_bbox = GRect(0, 2 * visible_circle_radius, bounds.size.w, bounds.size.h - 2 * visible_circle_radius);
-    if (DEBUG_BBOX) {
-      graphics_draw_rect(ctx, date_bbox);
-    }
-    format_date(now);
-    graphics_draw_text(ctx, s_buffer, date_font, date_bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
+  draw_hour(ctx, center, minute_deg, visible_circle_radius, now);
+  if (INCLUDE_DATE) {
+    draw_date(ctx, bounds, visible_circle_radius, now);
   }
 }
-
 
 static void window_load(Window* window) {
   Layer* window_layer = window_get_root_layer(window);
@@ -166,7 +169,6 @@ static void window_load(Window* window) {
 static void window_unload(Window* window) {
   layer_destroy(s_layer);
 }
-
 
 static void tick_handler(struct tm* now, TimeUnits units_changed) {
   layer_mark_dirty(window_get_root_layer(s_window));

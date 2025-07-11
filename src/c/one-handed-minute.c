@@ -25,7 +25,9 @@ typedef struct ClaySettings {
   GColor color_hour;
   GColor color_day_of_week;
   GColor color_month_date;
-  // TODO: reserve some spots in this config before release
+  GColor color_battery_inside;
+  GColor color_battery_outside;
+  uint8_t reserved[40]; // for later growth
 } __attribute__((__packed__)) ClaySettings;
 
 ClaySettings settings;
@@ -38,6 +40,8 @@ static void default_settings() {
   settings.color_hour = GColorWhite;
   settings.color_day_of_week = GColorWhite;
   settings.color_month_date = GColorWhite;
+  settings.color_battery_inside = COLOR_FALLBACK(GColorGreen, GColorWhite);
+  settings.color_battery_outside = GColorWhite;
 }
 
 static Window* s_window;
@@ -120,6 +124,28 @@ static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, st
   graphics_draw_text(ctx, s_buffer, date_font, date_bbox, GTextOverflowModeFill, GTextAlignmentRight, NULL);
 }
 
+static void draw_battery(GContext* ctx, GRect bounds, int visible_circle_radius) {
+  BatteryChargeState bcs = battery_state_service_peek();
+  int w = 7;
+  int h = 24;  // TODO? bigger on emery
+  int top = bounds.origin.y + 3;
+  int bot = top + h;
+  int lft = bounds.origin.x + 3;
+  int rgt = lft + w;
+
+  graphics_context_set_stroke_color(ctx, settings.color_battery_outside);
+  graphics_context_set_stroke_width(ctx, 1);
+  graphics_draw_line(ctx, GPoint(lft, top), GPoint(rgt, top));
+  graphics_draw_line(ctx, GPoint(lft, bot), GPoint(rgt, bot));
+  graphics_draw_line(ctx, GPoint(lft, top), GPoint(lft, bot));
+  graphics_draw_line(ctx, GPoint(rgt, top), GPoint(rgt, bot));
+  graphics_draw_line(ctx, GPoint(lft + 2, top - 1), GPoint(rgt - 2, top - 1));  // like a AAA cap
+  
+  graphics_context_set_fill_color(ctx, settings.color_battery_inside);
+  int fill_size = (h - 1) * bcs.charge_percent / 100;
+  graphics_fill_rect(ctx, GRect(lft + 1, bot - fill_size, w - 1, fill_size), 0, GCornerNone);
+}
+
 static void update_layer(Layer* layer, GContext* ctx) {
   time_t temp = time(NULL);
   struct tm* now = localtime(&temp);
@@ -138,6 +164,7 @@ static void update_layer(Layer* layer, GContext* ctx) {
   draw_hour(ctx, center, minute_deg, visible_circle_radius, now);
   draw_date(ctx, bounds, visible_circle_radius, now);
   draw_hand(ctx, center, minute_deg, hand_length);
+  draw_battery(ctx, bounds, visible_circle_radius);
 }
 
 static void window_load(Window* window) {
@@ -170,13 +197,15 @@ static void save_settings() {
 
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple* t;
-  if ((t = dict_find(iter, MESSAGE_KEY_color_background ))) settings.color_background  = GColorFromHEX(t->value->int32);
-  if ((t = dict_find(iter, MESSAGE_KEY_color_major_tick ))) settings.color_major_tick  = GColorFromHEX(t->value->int32);
-  if ((t = dict_find(iter, MESSAGE_KEY_color_minor_tick ))) settings.color_minor_tick  = GColorFromHEX(t->value->int32);
-  if ((t = dict_find(iter, MESSAGE_KEY_color_hand       ))) settings.color_hand        = GColorFromHEX(t->value->int32);
-  if ((t = dict_find(iter, MESSAGE_KEY_color_hour       ))) settings.color_hour        = GColorFromHEX(t->value->int32);
-  if ((t = dict_find(iter, MESSAGE_KEY_color_day_of_week))) settings.color_day_of_week = GColorFromHEX(t->value->int32);
-  if ((t = dict_find(iter, MESSAGE_KEY_color_month_date ))) settings.color_month_date  = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_background      ))) settings.color_background       = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_major_tick      ))) settings.color_major_tick       = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_minor_tick      ))) settings.color_minor_tick       = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_hand            ))) settings.color_hand             = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_hour            ))) settings.color_hour             = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_day_of_week     ))) settings.color_day_of_week      = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_month_date      ))) settings.color_month_date       = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_battery_inside  ))) settings.color_battery_inside   = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_battery_outside ))) settings.color_battery_outside  = GColorFromHEX(t->value->int32);
   save_settings();
   // Update the display based on new settings
   layer_mark_dirty(window_get_root_layer(s_window));

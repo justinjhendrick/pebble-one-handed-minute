@@ -34,7 +34,9 @@
       "color_hand",
       "color_hour",
       "color_day_of_week",
-      "color_month_date"
+      "color_month_date",
+      "color_battery_outside",
+      "color_battery_inside"
     ],
     "resources": {
       "media": []

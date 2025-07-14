@@ -8,13 +8,14 @@
       { "type": "color",  "messageKey": "color_major_tick",         "defaultValue": "0xFFFFFF", "label": "color_major_tick" },
       { "type": "color",  "messageKey": "color_minor_tick",         "defaultValue": "0xFFFFFF", "label": "color_minor_tick" },
       { "type": "color",  "messageKey": "color_hand",               "defaultValue": "0xFFFFFF", "label": "color_hand" },
+      { "type": "color",  "messageKey": "color_hand_inside",        "defaultValue": "0x000000", "label": "color_hand_inside", "allowGray": true },
       { "type": "color",  "messageKey": "color_hour",               "defaultValue": "0xFFFFFF", "label": "color_hour" },
       { "type": "color",  "messageKey": "color_day_of_week",        "defaultValue": "0xFFFFFF", "label": "color_day_of_week" },
       { "type": "color",  "messageKey": "color_month_date",         "defaultValue": "0xFFFFFF", "label": "color_month_date" },
       { "type": "color",  "messageKey": "color_battery_outside",    "defaultValue": "0xFFFFFF", "label": "color_battery_outside" },
 
       { "capabilities": ["COLOR"], "type": "color", "messageKey": "color_battery_inside", "defaultValue": "0x00FF00", "label": "color_battery_inside" },
-      { "capabilities": ["BW"],    "type": "color", "messageKey": "color_battery_inside", "defaultValue": "0xFFFFFF", "label": "color_battery_inside" }
+      { "capabilities": ["BW"],    "type": "color", "messageKey": "color_battery_inside", "defaultValue": "0xAAAAAA", "label": "color_battery_inside", "allowGray": true }
     ]
   },
   {

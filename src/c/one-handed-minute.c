@@ -7,8 +7,6 @@
 #define SETTINGS_VERSION_KEY 1
 #define SETTINGS_KEY 2
 
-// TODO: battery charge indicator
-// TODO: bluetooth disconnect indicator?
 // TODO: silent mode indicator?
 
 static const GPathInfo ARROW_POINTS = {
@@ -22,6 +20,7 @@ typedef struct ClaySettings {
   GColor color_major_tick;
   GColor color_minor_tick;
   GColor color_hand;
+  GColor color_hand_inside;
   GColor color_hour;
   GColor color_day_of_week;
   GColor color_month_date;
@@ -37,10 +36,11 @@ static void default_settings() {
   settings.color_major_tick = GColorWhite;
   settings.color_minor_tick = GColorWhite;
   settings.color_hand = GColorWhite;
+  settings.color_hand_inside = GColorBlack;
   settings.color_hour = GColorWhite;
   settings.color_day_of_week = GColorWhite;
   settings.color_month_date = GColorWhite;
-  settings.color_battery_inside = COLOR_FALLBACK(GColorGreen, GColorWhite);
+  settings.color_battery_inside = COLOR_FALLBACK(GColorGreen, GColorLightGray);
   settings.color_battery_outside = GColorWhite;
 }
 
@@ -101,9 +101,11 @@ static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_len
   int hand_width = 12;
   graphics_context_set_stroke_width(ctx, 3);
   graphics_context_set_stroke_color(ctx, settings.color_hand);
+  graphics_context_set_fill_color(ctx, settings.color_hand_inside);
   change_arrow_size(hand_width, hand_length);
   gpath_rotate_to(s_arrow, DEG_TO_TRIGANGLE(minute_deg));
   gpath_move_to(s_arrow, center);
+  gpath_draw_filled(ctx, s_arrow);
   gpath_draw_outline(ctx, s_arrow);
   // Circle at the base to smooth out the rotation
   graphics_context_set_fill_color(ctx, settings.color_hand);
@@ -111,8 +113,12 @@ static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_len
 }
 
 static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, struct tm* now) {
-  // TODO: bigger font on emery
-  GFont date_font = fonts_get_system_font(FONT_KEY_GOTHIC_24);
+  GFont date_font;
+  if (bounds.size.h >= 200) {
+    date_font = fonts_get_system_font(FONT_KEY_GOTHIC_28);
+  } else {
+    date_font = fonts_get_system_font(FONT_KEY_GOTHIC_24);
+  }
   GRect date_bbox;
   date_bbox.origin = GPoint(2, 2 * visible_circle_radius - 8);
   date_bbox.size = GSize(bounds.size.w - 4, bounds.size.h - date_bbox.origin.y);
@@ -124,10 +130,17 @@ static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, st
   graphics_draw_text(ctx, s_buffer, date_font, date_bbox, GTextOverflowModeFill, GTextAlignmentRight, NULL);
 }
 
-static void draw_battery(GContext* ctx, GRect bounds, int visible_circle_radius) {
+static void draw_battery(GContext* ctx, GRect bounds) {
   BatteryChargeState bcs = battery_state_service_peek();
-  int w = 7;
-  int h = 24;  // TODO? bigger on emery
+  int w;
+  int h;
+  if (bounds.size.h > 200) { // bigger on emery
+    w = 9;
+    h = 30;
+  } else {
+    w = 7;
+    h = 24;
+  }
   int top = bounds.origin.y + 3;
   int bot = top + h;
   int lft = bounds.origin.x + 3;
@@ -144,6 +157,53 @@ static void draw_battery(GContext* ctx, GRect bounds, int visible_circle_radius)
   graphics_context_set_fill_color(ctx, settings.color_battery_inside);
   int fill_size = (h - 1) * bcs.charge_percent / 100;
   graphics_fill_rect(ctx, GRect(lft + 1, bot - fill_size, w - 1, fill_size), 0, GCornerNone);
+}
+
+static void draw_bluetooth(GContext* ctx, GRect bounds) {
+  if (connection_service_peek_pebble_app_connection()) {
+    return;
+  }
+  // Draw the phone disconnected icon
+  GPoint z = GPoint(bounds.origin.x + bounds.size.w - 12, bounds.origin.y);
+  static const uint8_t grid[22][12] = {
+    {0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,1,1,1,1,1,1,1,1,0,0},
+    {0,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,0,0,1,1,1,1,0},
+    {0,1,1,1,1,0,0,1,1,1,1,0},
+    {0,0,1,1,1,1,1,1,1,1,0,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0},
+  };
+  for (int y = 0; y < 22; y++) {
+    for (int x = 0; x < 12; x++) {
+      int p = grid[y][x];
+      if (p) {
+        graphics_context_set_stroke_color(ctx, GColorWhite);
+      } else {
+        graphics_context_set_stroke_color(ctx, GColorBlack);
+      }
+      graphics_draw_pixel(ctx, GPoint(z.x + x, z.y + y));
+    }
+  }
+  graphics_context_set_stroke_color(ctx, COLOR_FALLBACK(GColorRed, GColorWhite));
+  graphics_context_set_stroke_width(ctx, 1);
+  graphics_draw_line(ctx, GPoint(z.x, z.y + 3), GPoint(z.x + 12, z.y + 17));
+  graphics_draw_line(ctx, GPoint(z.x, z.y + 4), GPoint(z.x + 12, z.y + 18));
 }
 
 static void update_layer(Layer* layer, GContext* ctx) {
@@ -164,7 +224,10 @@ static void update_layer(Layer* layer, GContext* ctx) {
   draw_hour(ctx, center, minute_deg, visible_circle_radius, now);
   draw_date(ctx, bounds, visible_circle_radius, now);
   draw_hand(ctx, center, minute_deg, hand_length);
-  draw_battery(ctx, bounds, visible_circle_radius);
+  if (PBL_IF_RECT_ELSE(true, false)) {
+    draw_battery(ctx, bounds);
+    draw_bluetooth(ctx, bounds);
+  }
 }
 
 static void window_load(Window* window) {
@@ -201,6 +264,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_color_major_tick      ))) settings.color_major_tick       = GColorFromHEX(t->value->int32);
   if ((t = dict_find(iter, MESSAGE_KEY_color_minor_tick      ))) settings.color_minor_tick       = GColorFromHEX(t->value->int32);
   if ((t = dict_find(iter, MESSAGE_KEY_color_hand            ))) settings.color_hand             = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_hand_inside     ))) settings.color_hand_inside      = GColorFromHEX(t->value->int32);
   if ((t = dict_find(iter, MESSAGE_KEY_color_hour            ))) settings.color_hour             = GColorFromHEX(t->value->int32);
   if ((t = dict_find(iter, MESSAGE_KEY_color_day_of_week     ))) settings.color_day_of_week      = GColorFromHEX(t->value->int32);
   if ((t = dict_find(iter, MESSAGE_KEY_color_month_date      ))) settings.color_month_date       = GColorFromHEX(t->value->int32);

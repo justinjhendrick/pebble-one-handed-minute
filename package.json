@@ -32,6 +32,7 @@
       "color_major_tick",
       "color_minor_tick",
       "color_hand",
+      "color_hand_inside",
       "color_hour",
       "color_day_of_week",
       "color_month_date",

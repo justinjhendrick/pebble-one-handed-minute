@@ -14,6 +14,8 @@ def main() -> int:
         check_call(["rebble", "wipe"])
         check_call(["rebble", "kill"])
         check_call(["rebble", "install", "--emulator", platform])
+        check_call(["rebble", "emu-time-format", "--format", "12h"])
+        check_call(["rebble", "install", "--emulator", platform])
         check_call(["rebble", "screenshot", f"screenshot_{platform}.png"])
     check_call(["rebble", "wipe"])
     check_call(["rebble", "kill"])

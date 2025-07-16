@@ -3,6 +3,7 @@
 
 #define BUFFER_LEN (10)
 #define DEBUG_TIME (false)
+#define BT_OK_OVERRIDE (true)
 
 #define SETTINGS_VERSION_KEY 1
 #define SETTINGS_KEY 2
@@ -135,15 +136,15 @@ static void draw_battery(GContext* ctx, GRect bounds) {
   int w;
   int h;
   if (bounds.size.h > 200) { // bigger on emery
-    w = 9;
-    h = 30;
+    w = 11;
+    h = 34;
   } else {
-    w = 7;
-    h = 24;
+    w = 8;
+    h = 28;
   }
-  int top = bounds.origin.y + 3;
+  int top = bounds.origin.y + 2;
   int bot = top + h;
-  int lft = bounds.origin.x + 3;
+  int lft = bounds.origin.x + 1;
   int rgt = lft + w;
 
   graphics_context_set_stroke_color(ctx, settings.color_battery_outside);
@@ -159,13 +160,15 @@ static void draw_battery(GContext* ctx, GRect bounds) {
   graphics_fill_rect(ctx, GRect(lft + 1, bot - fill_size, w - 1, fill_size), 0, GCornerNone);
 }
 
+#define PHONE_RASTER_Y (24)
+#define PHONE_RASTER_X (12)
 static void draw_bluetooth(GContext* ctx, GRect bounds) {
-  if (connection_service_peek_pebble_app_connection()) {
+  if (BT_OK_OVERRIDE && connection_service_peek_pebble_app_connection()) {
     return;
   }
   // Draw the phone disconnected icon
-  GPoint z = GPoint(bounds.origin.x + bounds.size.w - 12, bounds.origin.y);
-  static const uint8_t grid[22][12] = {
+  GPoint z = GPoint(bounds.origin.x + bounds.size.w - PHONE_RASTER_X, bounds.origin.y);
+  static const uint8_t phone_raster[PHONE_RASTER_Y][PHONE_RASTER_X] = {
     {0,0,0,0,0,0,0,0,0,0,0,0},
     {0,0,1,1,1,1,1,1,1,1,0,0},
     {0,1,1,1,1,1,1,1,1,1,1,0},
@@ -173,13 +176,15 @@ static void draw_bluetooth(GContext* ctx, GRect bounds) {
     {0,1,0,0,0,0,0,0,0,0,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
-    {0,1,0,0,0,0,0,0,0,0,1,0},
-    {0,1,0,0,0,0,0,0,0,0,1,0},
-    {0,1,0,0,0,0,0,0,0,0,1,0},
-    {0,1,0,0,0,0,0,0,0,0,1,0},
-    {0,1,0,0,0,0,0,0,0,0,1,0},
-    {0,1,0,0,0,0,0,0,0,0,1,0},
-    {0,1,0,0,0,0,0,0,0,0,1,0},
+    {0,1,2,0,0,0,0,0,0,2,1,0},
+    {0,1,2,2,0,0,0,0,2,2,1,0},
+    {0,1,0,2,2,0,0,2,2,0,1,0},
+    {0,1,0,0,2,2,2,2,0,0,1,0},
+    {0,1,0,0,0,2,2,0,0,0,1,0},
+    {0,1,0,0,2,2,2,2,0,0,1,0},
+    {0,1,0,2,2,0,0,2,2,0,1,0},
+    {0,1,2,2,0,0,0,0,2,2,1,0},
+    {0,1,2,0,0,0,0,0,0,2,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
@@ -189,21 +194,19 @@ static void draw_bluetooth(GContext* ctx, GRect bounds) {
     {0,0,1,1,1,1,1,1,1,1,0,0},
     {0,0,0,0,0,0,0,0,0,0,0,0},
   };
-  for (int y = 0; y < 22; y++) {
-    for (int x = 0; x < 12; x++) {
-      int p = grid[y][x];
-      if (p) {
+  for (int y = 0; y < PHONE_RASTER_Y; y++) {
+    for (int x = 0; x < PHONE_RASTER_X; x++) {
+      int pixel = phone_raster[y][x];
+      if (pixel == 1) {
         graphics_context_set_stroke_color(ctx, GColorWhite);
+      } else if (pixel == 2) {
+        graphics_context_set_stroke_color(ctx, COLOR_FALLBACK(GColorRed, GColorWhite));
       } else {
         graphics_context_set_stroke_color(ctx, GColorBlack);
       }
       graphics_draw_pixel(ctx, GPoint(z.x + x, z.y + y));
     }
   }
-  graphics_context_set_stroke_color(ctx, COLOR_FALLBACK(GColorRed, GColorWhite));
-  graphics_context_set_stroke_width(ctx, 1);
-  graphics_draw_line(ctx, GPoint(z.x, z.y + 3), GPoint(z.x + 12, z.y + 17));
-  graphics_draw_line(ctx, GPoint(z.x, z.y + 4), GPoint(z.x + 12, z.y + 18));
 }
 
 static void update_layer(Layer* layer, GContext* ctx) {
@@ -222,9 +225,9 @@ static void update_layer(Layer* layer, GContext* ctx) {
 
   draw_ticks(ctx, center, visible_circle_radius);
   draw_hour(ctx, center, minute_deg, visible_circle_radius, now);
-  draw_date(ctx, bounds, visible_circle_radius, now);
   draw_hand(ctx, center, minute_deg, hand_length);
   if (PBL_IF_RECT_ELSE(true, false)) {
+    draw_date(ctx, bounds, visible_circle_radius, now);
     draw_battery(ctx, bounds);
     draw_bluetooth(ctx, bounds);
   }

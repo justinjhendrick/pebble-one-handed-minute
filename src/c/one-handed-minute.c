@@ -33,15 +33,15 @@ typedef struct ClaySettings {
 ClaySettings settings;
 
 static void default_settings() {
-  settings.color_background = GColorBlack;
+  settings.color_background = COLOR_FALLBACK(GColorDarkGreen, GColorBlack);
   settings.color_major_tick = GColorWhite;
   settings.color_minor_tick = GColorWhite;
-  settings.color_hand = GColorWhite;
-  settings.color_hand_inside = GColorBlack;
+  settings.color_hand = COLOR_FALLBACK(GColorPictonBlue, GColorWhite);
+  settings.color_hand_inside = COLOR_FALLBACK(GColorCobaltBlue, GColorBlack);
   settings.color_hour = GColorWhite;
   settings.color_day_of_week = GColorWhite;
   settings.color_month_date = GColorWhite;
-  settings.color_battery_inside = COLOR_FALLBACK(GColorGreen, GColorLightGray);
+  settings.color_battery_inside = GColorWhite;
   settings.color_battery_outside = GColorWhite;
 }
 
@@ -131,12 +131,27 @@ static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, st
   graphics_draw_text(ctx, s_buffer, date_font, date_bbox, GTextOverflowModeFill, GTextAlignmentRight, NULL);
 }
 
+static void fill_rect_dither(GContext* ctx, GColor a, GColor b, GRect r) {
+  int i = 0;
+  for (int y = r.origin.y; y < r.origin.y + r.size.h; y++) {
+    for (int x = r.origin.x; x < r.origin.x + r.size.w; x++) {
+      if (i % 2) {
+        graphics_context_set_stroke_color(ctx, a);
+      } else {
+        graphics_context_set_stroke_color(ctx, b);
+      }
+      graphics_draw_pixel(ctx, GPoint(x, y));
+      i++;
+    }
+  }
+}
+
 static void draw_battery(GContext* ctx, GRect bounds) {
   BatteryChargeState bcs = battery_state_service_peek();
   int w;
   int h;
   if (bounds.size.h > 200) { // bigger on emery
-    w = 11;
+    w = 10;
     h = 34;
   } else {
     w = 8;
@@ -157,7 +172,8 @@ static void draw_battery(GContext* ctx, GRect bounds) {
   
   graphics_context_set_fill_color(ctx, settings.color_battery_inside);
   int fill_size = (h - 1) * bcs.charge_percent / 100;
-  graphics_fill_rect(ctx, GRect(lft + 1, bot - fill_size, w - 1, fill_size), 0, GCornerNone);
+  GRect fill_area = GRect(lft + 1, bot - fill_size, w - 1, fill_size);
+  fill_rect_dither(ctx, settings.color_battery_inside, settings.color_background, fill_area);
 }
 
 #define PHONE_RASTER_Y (24)

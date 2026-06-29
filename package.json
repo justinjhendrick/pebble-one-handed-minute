@@ -1,7 +1,7 @@
 {
   "name": "one-handed-minute",
   "author": "justinjhendrick",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "keywords": [
     "pebble-watchface",
     "analog",
@@ -10,7 +10,7 @@
   ],
   "private": false,
   "dependencies": {
-    "pebble-clay": "^1.0.4"
+    "@rebble/clay": "^1.0.8"
   },
   "pebble": {
     "displayName": "One Handed Minute",
@@ -22,7 +22,8 @@
       "basalt",
       "chalk",
       "diorite",
-      "emery"
+      "emery",
+      "gabbro"
     ],
     "watchapp": {
       "watchface": true
@@ -40,7 +41,9 @@
       "color_battery_inside"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {"name": "LATO_52", "file": "fonts/Lato-Regular.ttf", "characterRegex": "[ 0-9]", "type": "font", "targetPlatforms": ["emery", "gabbro"]}
+      ]
     }
   }
 }

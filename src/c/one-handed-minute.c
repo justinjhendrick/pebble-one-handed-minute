@@ -3,12 +3,12 @@
 
 #define BUFFER_LEN (10)
 #define DEBUG_TIME (false)
+#define DEBUG_BBOX (false)
 #define BT_OK_OVERRIDE (true)
+#define BIG (PBL_DISPLAY_WIDTH >= 200)
 
 #define SETTINGS_VERSION_KEY 1
 #define SETTINGS_KEY 2
-
-// TODO: silent mode indicator?
 
 static const GPathInfo ARROW_POINTS = {
   .num_points = 4,
@@ -49,6 +49,7 @@ static Window* s_window;
 static Layer* s_layer;
 static char s_buffer[BUFFER_LEN];
 static GPath* s_arrow;
+static GFont s_font_lg = NULL;
 
 static void draw_ticks(GContext* ctx, GPoint center, int visible_circle_radius) {
   for (int16_t tick_minute = 0; tick_minute < 60; tick_minute += 1) {
@@ -57,16 +58,16 @@ static void draw_ticks(GContext* ctx, GPoint center, int visible_circle_radius) 
     int tick_length = 1;
     if (tick_minute % 15 == 0) {
       graphics_context_set_stroke_color(ctx, settings.color_major_tick);
-      graphics_context_set_stroke_width(ctx, 3);
+      graphics_context_set_stroke_width(ctx, 5);
       tick_length = 2 * visible_circle_radius / 10;
     } else if (tick_minute % 5 == 0) {
       graphics_context_set_stroke_color(ctx, settings.color_minor_tick);
-      graphics_context_set_stroke_width(ctx, 1);
-      tick_length = visible_circle_radius / 10;
+      graphics_context_set_stroke_width(ctx, 3);
+      tick_length = 2 * visible_circle_radius / 10;
     } else {
       graphics_context_set_stroke_color(ctx, settings.color_minor_tick);
-      graphics_draw_pixel(ctx, minute_tick_outer);
-      continue;
+      graphics_context_set_stroke_width(ctx, 1);
+      tick_length = visible_circle_radius / 10;
     }
     GPoint minute_tick_inner = cartesian_from_polar(center, visible_circle_radius - tick_length, tick_deg);
     graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
@@ -74,11 +75,25 @@ static void draw_ticks(GContext* ctx, GPoint center, int visible_circle_radius) 
 }
 
 static void draw_hour(GContext* ctx, GPoint center, int minute_deg, int visible_circle_radius, struct tm* now) {
+#if BIG
+  int shift_up = 7;
   GSize hour_bbox_size = GSize(80, 50);
+  GFont hour_font = s_font_lg;
+#else
+  int shift_up = 0;
+  GSize hour_bbox_size = GSize(80, 50);
+  GFont hour_font = fonts_get_system_font(FONT_KEY_BITHAM_42_LIGHT);
+#endif
   int inverted_minute_deg = 180 + minute_deg;
   GPoint hour_bbox_midpoint = cartesian_from_polar(center, visible_circle_radius / 2 - 5, inverted_minute_deg);
   GRect hour_bbox = rect_from_midpoint(hour_bbox_midpoint, hour_bbox_size);
-  GFont hour_font = fonts_get_system_font(FONT_KEY_BITHAM_42_LIGHT);
+  if (DEBUG_BBOX) {
+    graphics_context_set_stroke_color(ctx, GColorWhite);
+    graphics_context_set_stroke_width(ctx, 1);
+    graphics_draw_rect(ctx, hour_bbox);
+  }
+  hour_bbox.origin.y -= shift_up;
+
   format_hour(now, s_buffer, BUFFER_LEN);
   graphics_context_set_text_color(ctx, settings.color_hour);
   graphics_draw_text(ctx, s_buffer, hour_font, hour_bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
@@ -157,9 +172,9 @@ static void draw_battery(GContext* ctx, GRect bounds) {
     w = 8;
     h = 28;
   }
-  int top = bounds.origin.y + 2;
+  int top = bounds.origin.y + 7;
   int bot = top + h;
-  int lft = bounds.origin.x + 1;
+  int lft = bounds.origin.x + 3;
   int rgt = lft + w;
 
   graphics_context_set_stroke_color(ctx, settings.color_battery_outside);
@@ -169,7 +184,7 @@ static void draw_battery(GContext* ctx, GRect bounds) {
   graphics_draw_line(ctx, GPoint(lft, top), GPoint(lft, bot));
   graphics_draw_line(ctx, GPoint(rgt, top), GPoint(rgt, bot));
   graphics_draw_line(ctx, GPoint(lft + 2, top - 1), GPoint(rgt - 2, top - 1));  // like a AAA cap
-  
+
   graphics_context_set_fill_color(ctx, settings.color_battery_inside);
   int fill_size = (h - 1) * bcs.charge_percent / 100;
   GRect fill_area = GRect(lft + 1, bot - fill_size, w - 1, fill_size);
@@ -183,7 +198,7 @@ static void draw_bluetooth(GContext* ctx, GRect bounds) {
     return;
   }
   // Draw the phone disconnected icon
-  GPoint z = GPoint(bounds.origin.x + bounds.size.w - PHONE_RASTER_X, bounds.origin.y);
+  GPoint z = GPoint(bounds.origin.x + bounds.size.w - PHONE_RASTER_X - 3, bounds.origin.y + 7);
   static const uint8_t phone_raster[PHONE_RASTER_Y][PHONE_RASTER_X] = {
     {0,0,0,0,0,0,0,0,0,0,0,0},
     {0,0,1,1,1,1,1,1,1,1,0,0},
@@ -233,8 +248,8 @@ static void update_layer(Layer* layer, GContext* ctx) {
   }
   GRect bounds = layer_get_bounds(layer);
   window_set_background_color(s_window, settings.color_background);
-  int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2 - 2;
-  GPoint center = GPoint(visible_circle_radius + 1, visible_circle_radius + 1);
+  int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2;
+  GPoint center = GPoint(visible_circle_radius, visible_circle_radius + 2);
   int hand_length = visible_circle_radius - 6;
   int minute = now->tm_min;
   int minute_deg = 360 * minute / 60;
@@ -295,6 +310,9 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 }
 
 static void init(void) {
+#if BIG
+  s_font_lg = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_LATO_52));
+#endif
   load_settings();
   app_message_register_inbox_received(inbox_received_handler);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
@@ -312,6 +330,7 @@ static void init(void) {
 static void deinit(void) {
   if (s_arrow) gpath_destroy(s_arrow);
   if (s_window) window_destroy(s_window);
+  if (s_font_lg) fonts_unload_custom_font(s_font_lg);
 }
 
 int main(void) {

@@ -4,8 +4,10 @@
 #define BUFFER_LEN (10)
 #define DEBUG_TIME (false)
 #define DEBUG_BBOX (false)
-#define BT_OK_OVERRIDE (true)
+#define FORCE_BT_MISSING (false)
 #define BIG (PBL_DISPLAY_WIDTH >= 200)
+#define HAS_COLOR (PBL_IF_COLOR_ELSE(true, false))
+#define STEP_GOAL (6000)
 
 #define SETTINGS_VERSION_KEY 1
 #define SETTINGS_KEY 2
@@ -51,6 +53,14 @@ static char s_buffer[BUFFER_LEN];
 static GPath* s_arrow;
 static GFont s_font_lg = NULL;
 
+static void debug_bbox(GContext* ctx, GRect bbox) {
+  if (DEBUG_BBOX) {
+    graphics_context_set_stroke_color(ctx, GColorWhite);
+    graphics_context_set_stroke_width(ctx, 1);
+    graphics_draw_rect(ctx, bbox);
+  }
+}
+
 static void draw_ticks(GContext* ctx, GPoint center, int visible_circle_radius) {
   for (int16_t tick_minute = 0; tick_minute < 60; tick_minute += 1) {
     int tick_deg = tick_minute * 360 / 60;
@@ -87,11 +97,7 @@ static void draw_hour(GContext* ctx, GPoint center, int minute_deg, int visible_
   int inverted_minute_deg = 180 + minute_deg;
   GPoint hour_bbox_midpoint = cartesian_from_polar(center, visible_circle_radius / 2 - 5, inverted_minute_deg);
   GRect hour_bbox = rect_from_midpoint(hour_bbox_midpoint, hour_bbox_size);
-  if (DEBUG_BBOX) {
-    graphics_context_set_stroke_color(ctx, GColorWhite);
-    graphics_context_set_stroke_width(ctx, 1);
-    graphics_draw_rect(ctx, hour_bbox);
-  }
+  debug_bbox(ctx, hour_bbox);
   hour_bbox.origin.y -= shift_up;
 
   format_hour(now, s_buffer, BUFFER_LEN);
@@ -141,11 +147,7 @@ static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, st
   if (date_bbox.size.h < 20) {
     return;
   }
-  if (DEBUG_BBOX) {
-    graphics_context_set_stroke_color(ctx, GColorWhite);
-    graphics_context_set_stroke_width(ctx, 1);
-    graphics_draw_rect(ctx, date_bbox);
-  }
+  debug_bbox(ctx, date_bbox);
   format_day_of_week(now, s_buffer, BUFFER_LEN);
   graphics_context_set_text_color(ctx, settings.color_day_of_week);
   graphics_draw_text(ctx, s_buffer, date_font, date_bbox, GTextOverflowModeFill, GTextAlignmentLeft, NULL);
@@ -169,7 +171,7 @@ static void fill_rect_dither(GContext* ctx, GColor a, GColor b, GRect r) {
   }
 }
 
-static void draw_battery(GContext* ctx, GRect bounds) {
+static GPoint draw_battery(GContext* ctx, GRect bounds) {
   BatteryChargeState bcs = battery_state_service_peek();
   int w;
   int h;
@@ -180,7 +182,7 @@ static void draw_battery(GContext* ctx, GRect bounds) {
     w = 8;
     h = 28;
   }
-  int top = bounds.origin.y + 7;
+  int top = bounds.origin.y + 6;
   int bot = top + h;
   int lft = bounds.origin.x + 3;
   int rgt = lft + w;
@@ -197,24 +199,37 @@ static void draw_battery(GContext* ctx, GRect bounds) {
   int fill_size = (h - 1) * bcs.charge_percent / 100;
   GRect fill_area = GRect(lft + 1, bot - fill_size, w - 1, fill_size);
   fill_rect_dither(ctx, settings.color_battery_inside, settings.color_background, fill_area);
+  return GPoint(rgt, top - 1);
 }
 
+#if BIG
 #define PHONE_RASTER_Y (24)
 #define PHONE_RASTER_X (12)
-static void draw_bluetooth(GContext* ctx, GRect bounds) {
-  if (BT_OK_OVERRIDE && connection_service_peek_pebble_app_connection()) {
+#else
+#define PHONE_RASTER_Y (17)
+#define PHONE_RASTER_X (12)
+#endif
+
+static void draw_bluetooth(GContext* ctx, GRect bounds, GPoint top_left) {
+  bool bt_ok = connection_service_peek_pebble_app_connection();
+  if (FORCE_BT_MISSING) {
+    bt_ok = false;
+  }
+  if (bt_ok) {
     return;
   }
   // Draw the phone disconnected icon
-  GPoint z = GPoint(bounds.origin.x + bounds.size.w - PHONE_RASTER_X - 3, bounds.origin.y + 7);
+  GPoint z = top_left;
   static const uint8_t phone_raster[PHONE_RASTER_Y][PHONE_RASTER_X] = {
     {0,0,0,0,0,0,0,0,0,0,0,0},
     {0,0,1,1,1,1,1,1,1,1,0,0},
     {0,1,1,1,1,1,1,1,1,1,1,0},
+#if BIG
     {0,1,1,1,1,1,1,1,1,1,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
+#endif
     {0,1,2,0,0,0,0,0,0,2,1,0},
     {0,1,2,2,0,0,0,0,2,2,1,0},
     {0,1,0,2,2,0,0,2,2,0,1,0},
@@ -224,9 +239,11 @@ static void draw_bluetooth(GContext* ctx, GRect bounds) {
     {0,1,0,2,2,0,0,2,2,0,1,0},
     {0,1,2,2,0,0,0,0,2,2,1,0},
     {0,1,2,0,0,0,0,0,0,2,1,0},
+#if BIG
     {0,1,0,0,0,0,0,0,0,0,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
     {0,1,0,0,0,0,0,0,0,0,1,0},
+#endif
     {0,1,1,1,1,1,1,1,1,1,1,0},
     {0,1,1,1,1,0,0,1,1,1,1,0},
     {0,1,1,1,1,0,0,1,1,1,1,0},
@@ -248,6 +265,65 @@ static void draw_bluetooth(GContext* ctx, GRect bounds) {
   }
 }
 
+static void draw_star(GContext* ctx, GPoint start, int len) {
+  GPoint curr = start;
+  GPoint next;
+  int angle = DEG_TO_TRIGANGLE(0);
+  for (int i = 0; i < 5; i++) {
+    next.x = curr.x + len * cos_lookup(angle) / TRIG_MAX_RATIO;
+    next.y = curr.y + len * sin_lookup(angle) / TRIG_MAX_RATIO;
+    graphics_draw_line(ctx, curr, next);
+    curr = next;
+    angle += DEG_TO_TRIGANGLE(144);
+  }
+}
+
+static void draw_steps(GContext* ctx, GRect bounds, int vcr) {
+  if (STEP_GOAL == 0) {
+    return;
+  }
+  int size = vcr - 1000 * vcr / 1414;
+  GRect bbox = (GRect) {
+    .origin = (GPoint) {
+      .x = bounds.origin.x + bounds.size.w - size,
+      .y = bounds.origin.y
+    },
+    .size = (GSize) {
+      .w = size,
+      .h = size
+    }
+  };
+  int steps = health_service_sum_today(HealthMetricStepCount);
+  GColor step_color;
+  if (HAS_COLOR) {
+    if (steps > STEP_GOAL) {
+      step_color = GColorYellow;
+    } else if (steps > STEP_GOAL * 2 / 3) {
+      step_color = GColorLightGray;
+    } else if (steps > STEP_GOAL / 3) {
+      step_color = GColorWindsorTan;
+    } else {
+      return;
+    }
+  } else {
+    if (steps > STEP_GOAL) {
+      step_color = GColorWhite;
+    } else {
+      return;
+    }
+  }
+
+  // Need a contrasty background for gold/silver/bronze
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, bbox, 3, GCornersAll);
+
+  int sw = BIG ? 3 : 1;
+  graphics_context_set_stroke_width(ctx, sw);
+  graphics_context_set_stroke_color(ctx, step_color);
+  GPoint star_start = GPoint(bbox.origin.x + 1, bbox.origin.y + bbox.size.h / 3 + 2);
+  draw_star(ctx, star_start, bbox.size.w - 2);
+}
+
 static void update_layer(Layer* layer, GContext* ctx) {
   time_t temp = time(NULL);
   struct tm* now = localtime(&temp);
@@ -255,7 +331,8 @@ static void update_layer(Layer* layer, GContext* ctx) {
     fast_forward_time(now);
   }
   GRect bounds = layer_get_unobstructed_bounds(layer);
-  window_set_background_color(s_window, settings.color_background);
+  graphics_context_set_fill_color(ctx, settings.color_background);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2;
   GPoint center = GPoint(bounds.origin.x + bounds.size.w / 2, bounds.origin.y + visible_circle_radius + 2);
   int hand_length = visible_circle_radius - 6;
@@ -267,8 +344,10 @@ static void update_layer(Layer* layer, GContext* ctx) {
   draw_hand(ctx, center, minute_deg, hand_length);
   if (PBL_IF_RECT_ELSE(true, false)) {
     draw_date(ctx, bounds, visible_circle_radius, now);
-    draw_battery(ctx, bounds);
-    draw_bluetooth(ctx, bounds);
+    GPoint batt_top_right = draw_battery(ctx, bounds);
+    GPoint bt_top_left = GPoint(batt_top_right.x + 2, batt_top_right.y);
+    draw_bluetooth(ctx, bounds, bt_top_left);
+    draw_steps(ctx, bounds, visible_circle_radius);
   }
 }
 

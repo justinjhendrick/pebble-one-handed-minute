@@ -4,9 +4,9 @@ https://apps.repebble.com/one-handed-minute_67f68f5cc6733d0009b2916d
 
 ## Pebble Watch Face
 
-### Aplite
+### Aplite, Diorite, Flint
 
-![screenshot](screenshot_aplite.png)
+![screenshot](screenshot_flint.png)
 
 ### Basalt
 
@@ -15,10 +15,6 @@ https://apps.repebble.com/one-handed-minute_67f68f5cc6733d0009b2916d
 ### Chalk
 
 ![screenshot](screenshot_chalk.png)
-
-### Diorite
-
-![screenshot](screenshot_diorite.png)
 
 ### Emery
 

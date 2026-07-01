@@ -11,6 +11,8 @@ def main() -> int:
         package = json.load(f)
     check_call(["pebble", "build"])
     for platform in package["pebble"]["targetPlatforms"]:
+        if platform in ("aplite", "diorite"):
+            continue  # same as flint
         check_call(["pebble", "wipe"])
         check_call(["pebble", "kill"])
         check_call(["pebble", "install", "--emulator", platform])

@@ -136,8 +136,16 @@ static void draw_date(GContext* ctx, GRect bounds, int visible_circle_radius, st
     date_font = fonts_get_system_font(FONT_KEY_GOTHIC_24);
   }
   GRect date_bbox;
-  date_bbox.origin = GPoint(2, 2 * visible_circle_radius - 8);
-  date_bbox.size = GSize(bounds.size.w - 4, bounds.size.h - date_bbox.origin.y);
+  date_bbox.origin = GPoint(3, 2 * visible_circle_radius - 8);
+  date_bbox.size = GSize(bounds.size.w - 6, bounds.size.h - date_bbox.origin.y);
+  if (date_bbox.size.h < 20) {
+    return;
+  }
+  if (DEBUG_BBOX) {
+    graphics_context_set_stroke_color(ctx, GColorWhite);
+    graphics_context_set_stroke_width(ctx, 1);
+    graphics_draw_rect(ctx, date_bbox);
+  }
   format_day_of_week(now, s_buffer, BUFFER_LEN);
   graphics_context_set_text_color(ctx, settings.color_day_of_week);
   graphics_draw_text(ctx, s_buffer, date_font, date_bbox, GTextOverflowModeFill, GTextAlignmentLeft, NULL);
@@ -246,10 +254,10 @@ static void update_layer(Layer* layer, GContext* ctx) {
   if (DEBUG_TIME) {
     fast_forward_time(now);
   }
-  GRect bounds = layer_get_bounds(layer);
+  GRect bounds = layer_get_unobstructed_bounds(layer);
   window_set_background_color(s_window, settings.color_background);
   int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2;
-  GPoint center = GPoint(visible_circle_radius, visible_circle_radius + 2);
+  GPoint center = GPoint(bounds.origin.x + bounds.size.w / 2, bounds.origin.y + visible_circle_radius + 2);
   int hand_length = visible_circle_radius - 6;
   int minute = now->tm_min;
   int minute_deg = 360 * minute / 60;

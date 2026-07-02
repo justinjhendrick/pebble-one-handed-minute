@@ -245,7 +245,7 @@ static void draw_steps(GContext* ctx, GRect bounds, int vcr) {
   if (STEP_GOAL == 0) {
     return;
   }
-  int steps = 4001;//health_service_sum_today(HealthMetricStepCount);
+  int steps = health_service_sum_today(HealthMetricStepCount);
   if (steps < STEP_GOAL / 3) {
     return;
   }

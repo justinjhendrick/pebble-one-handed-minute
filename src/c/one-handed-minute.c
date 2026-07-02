@@ -1,5 +1,6 @@
 #include <pebble.h>
 #include "utils.h"
+#include "shapes.h"
 
 #define BUFFER_LEN (10)
 #define DEBUG_TIME (false)
@@ -11,12 +12,6 @@
 
 #define SETTINGS_VERSION_KEY 1
 #define SETTINGS_KEY 2
-
-static const GPathInfo ARROW_POINTS = {
-  .num_points = 4,
-  // points will be filled by change_arrow_size
-  .points = (GPoint []) { {0, 0}, {0, 0}, {0, 0}, {0, 0} }
-};
 
 typedef struct ClaySettings {
   GColor color_background;
@@ -50,7 +45,6 @@ static void default_settings() {
 static Window* s_window;
 static Layer* s_layer;
 static char s_buffer[BUFFER_LEN];
-static GPath* s_arrow;
 static GFont s_font_lg = NULL;
 
 static void debug_bbox(GContext* ctx, GRect bbox) {
@@ -105,30 +99,12 @@ static void draw_hour(GContext* ctx, GPoint center, int minute_deg, int visible_
   graphics_draw_text(ctx, s_buffer, hour_font, hour_bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
 }
 
-static void change_arrow_size(int w, int h) {
-  ARROW_POINTS.points[0].x = 0;
-  ARROW_POINTS.points[0].y = 0;
-
-  ARROW_POINTS.points[1].x = w / 2;
-  ARROW_POINTS.points[1].y = -h * 3 / 10;
-
-  ARROW_POINTS.points[2].x = 0;
-  ARROW_POINTS.points[2].y = -h;
-
-  ARROW_POINTS.points[3].x = -w / 2;
-  ARROW_POINTS.points[3].y = -h * 3 / 10;
-}
-
 static void draw_hand(GContext* ctx, GPoint center, int minute_deg, int hand_length) {
   int hand_width = 12;
   graphics_context_set_stroke_width(ctx, 3);
   graphics_context_set_stroke_color(ctx, settings.color_hand);
   graphics_context_set_fill_color(ctx, settings.color_hand_inside);
-  change_arrow_size(hand_width, hand_length);
-  gpath_rotate_to(s_arrow, DEG_TO_TRIGANGLE(minute_deg));
-  gpath_move_to(s_arrow, center);
-  gpath_draw_filled(ctx, s_arrow);
-  gpath_draw_outline(ctx, s_arrow);
+  draw_arrow(ctx, hand_width, hand_length, DEG_TO_TRIGANGLE(minute_deg), center);
   // Circle at the base to smooth out the rotation
   graphics_context_set_fill_color(ctx, settings.color_hand);
   graphics_fill_circle(ctx, center, 3);
@@ -265,21 +241,12 @@ static void draw_bluetooth(GContext* ctx, GRect bounds, GPoint top_left) {
   }
 }
 
-static void draw_star(GContext* ctx, GPoint start, int len) {
-  GPoint curr = start;
-  GPoint next;
-  int angle = DEG_TO_TRIGANGLE(0);
-  for (int i = 0; i < 5; i++) {
-    next.x = curr.x + len * cos_lookup(angle) / TRIG_MAX_RATIO;
-    next.y = curr.y + len * sin_lookup(angle) / TRIG_MAX_RATIO;
-    graphics_draw_line(ctx, curr, next);
-    curr = next;
-    angle += DEG_TO_TRIGANGLE(144);
-  }
-}
-
 static void draw_steps(GContext* ctx, GRect bounds, int vcr) {
   if (STEP_GOAL == 0) {
+    return;
+  }
+  int steps = 4001;//health_service_sum_today(HealthMetricStepCount);
+  if (steps < STEP_GOAL / 3) {
     return;
   }
   int size = vcr - 1000 * vcr / 1414;
@@ -293,35 +260,20 @@ static void draw_steps(GContext* ctx, GRect bounds, int vcr) {
       .h = size
     }
   };
-  int steps = health_service_sum_today(HealthMetricStepCount);
-  GColor step_color;
-  if (HAS_COLOR) {
-    if (steps > STEP_GOAL) {
-      step_color = GColorYellow;
-    } else if (steps > STEP_GOAL * 2 / 3) {
-      step_color = GColorLightGray;
-    } else if (steps > STEP_GOAL / 3) {
-      step_color = GColorWindsorTan;
-    } else {
-      return;
-    }
-  } else {
-    if (steps > STEP_GOAL) {
-      step_color = GColorWhite;
-    } else {
-      return;
-    }
-  }
 
-  // Need a contrasty background for gold/silver/bronze
+  // Need a contrasty background for light colors
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, bbox, 3, GCornersAll);
 
-  int sw = BIG ? 3 : 1;
-  graphics_context_set_stroke_width(ctx, sw);
-  graphics_context_set_stroke_color(ctx, step_color);
-  GPoint star_start = GPoint(bbox.origin.x + 1, bbox.origin.y + bbox.size.h / 3 + 2);
-  draw_star(ctx, star_start, bbox.size.w - 2);
+  if (steps > STEP_GOAL * 4 / 3) {
+    draw_diamond(ctx, bbox);
+  } else if (steps > STEP_GOAL) {
+    draw_star(ctx, bbox);
+  } else if (steps > STEP_GOAL * 2 / 3) {
+    draw_shell(ctx, bbox);
+  } else {
+    draw_acorn(ctx, bbox);
+  }
 }
 
 static void update_layer(Layer* layer, GContext* ctx) {
@@ -410,12 +362,10 @@ static void init(void) {
     .unload = window_unload,
   });
   window_stack_push(s_window, true);
-  s_arrow = gpath_create(&ARROW_POINTS);
   tick_timer_service_subscribe(DEBUG_TIME ? SECOND_UNIT : MINUTE_UNIT, tick_handler);
 }
 
 static void deinit(void) {
-  if (s_arrow) gpath_destroy(s_arrow);
   if (s_window) window_destroy(s_window);
   if (s_font_lg) fonts_unload_custom_font(s_font_lg);
 }

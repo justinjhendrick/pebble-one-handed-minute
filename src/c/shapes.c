@@ -4,6 +4,15 @@
 
 #define MAX_POINTS (40)
 static GPoint s_points[MAX_POINTS];
+static GBitmap* s_shell = NULL;
+
+void shapes_init() {
+  s_shell = gbitmap_create_with_resource(RESOURCE_ID_SHELL_IMAGE);
+}
+
+void shapes_deinit() {
+  if (s_shell) gbitmap_destroy(s_shell);
+}
 
 static void draw_shape(GContext* ctx, uint32_t num_points, int rotation, GPoint offset) {
   GPath shape = (GPath) {
@@ -94,16 +103,10 @@ void draw_star(GContext* ctx, GRect bbox) {
 }
 
 void draw_shell(GContext* ctx, GRect bbox) {
-  GColor pearl = COLOR_FALLBACK(GColorRichBrilliantLavender, GColorWhite);
-  GPoint center = grect_center_point(&bbox);
-  center.x -= 1;
-  graphics_context_set_fill_color(ctx, pearl);
-  int r = bbox.size.w / 2 - 2;
-  graphics_fill_circle(ctx, center, r);
-
-  graphics_context_set_fill_color(ctx, GColorWhite);
-  GPoint shine = GPoint(center.x - r / 2 + 2, center.y - r / 2 + 2);
-  graphics_fill_circle(ctx, shine, r / 3);
+  GRect shifted = bbox;
+  shifted.origin.y += 2;
+  graphics_context_set_compositing_mode(ctx, GCompOpSet);
+  graphics_draw_bitmap_in_rect(ctx, s_shell, shifted);
 }
 
 void draw_acorn(GContext* ctx, GRect bbox) {
@@ -119,7 +122,7 @@ void draw_acorn(GContext* ctx, GRect bbox) {
   s_points[2].x = start.x + width * 5 / 6;
   s_points[2].y = start.y - width / 6;
 
-  s_points[3].x = start.x + width;
+  s_points[3].x = start.x + width - 1;
   s_points[3].y = start.y;
 
   s_points[4].x = s_points[3].x;
@@ -155,6 +158,10 @@ void draw_acorn(GContext* ctx, GRect bbox) {
   GPoint top = GPoint((s_points[1].x + s_points[2].x) / 2, s_points[1].y - 2);
   GPoint tip = GPoint(top.x - 2, top.y - 2);
   graphics_draw_line(ctx, top, tip);
+
+  GPoint bot = GPoint((s_points[7].x + s_points[8].x) / 2, s_points[7].y);
+  GPoint bot_tip = GPoint(bot.x, bot.y + 2);
+  graphics_draw_line(ctx, bot, bot_tip);
 
   graphics_context_set_stroke_width(ctx, 1);
   graphics_context_set_stroke_color(ctx, GColorBlack);

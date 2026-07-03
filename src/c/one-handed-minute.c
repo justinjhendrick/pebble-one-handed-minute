@@ -8,7 +8,9 @@
 #define FORCE_BT_MISSING (false)
 #define BIG (PBL_DISPLAY_WIDTH >= 200)
 #define HAS_COLOR (PBL_IF_COLOR_ELSE(true, false))
-#define STEP_GOAL (6000)
+#define IS_ROUND (PBL_IF_ROUND_ELSE(true, false))
+#define SETTINGS_RESERVED_BYTES (36)
+#define DEFAULT_STEP_GOAL (0)
 
 #define SETTINGS_VERSION_KEY 1
 #define SETTINGS_KEY 2
@@ -24,13 +26,15 @@ typedef struct ClaySettings {
   GColor color_month_date;
   GColor color_battery_inside;
   GColor color_battery_outside;
-  uint8_t reserved[40]; // for later growth
+  // Above this line was on settings v1
+  int step_goal;
+  uint8_t reserved[SETTINGS_RESERVED_BYTES]; // for later growth
 } __attribute__((__packed__)) ClaySettings;
 
 ClaySettings settings;
 
 static void default_settings() {
-  settings.color_background = COLOR_FALLBACK(GColorDarkGreen, GColorBlack);
+  settings.color_background = GColorBlack;
   settings.color_major_tick = GColorWhite;
   settings.color_minor_tick = GColorWhite;
   settings.color_hand = COLOR_FALLBACK(GColorPictonBlue, GColorWhite);
@@ -38,8 +42,13 @@ static void default_settings() {
   settings.color_hour = GColorWhite;
   settings.color_day_of_week = GColorWhite;
   settings.color_month_date = GColorWhite;
-  settings.color_battery_inside = GColorWhite;
+  settings.color_battery_inside = COLOR_FALLBACK(GColorBrightGreen, GColorWhite);
   settings.color_battery_outside = GColorWhite;
+  settings.step_goal = DEFAULT_STEP_GOAL;
+
+  for (int i = 0; i < SETTINGS_RESERVED_BYTES; i++) {
+    settings.reserved[i] = 0;
+  }
 }
 
 static Window* s_window;
@@ -242,11 +251,11 @@ static void draw_bluetooth(GContext* ctx, GRect bounds, GPoint top_left) {
 }
 
 static void draw_steps(GContext* ctx, GRect bounds, int vcr) {
-  if (STEP_GOAL == 0) {
+  if (settings.step_goal == 0) {
     return;
   }
   int steps = health_service_sum_today(HealthMetricStepCount);
-  if (steps < STEP_GOAL / 3) {
+  if (steps < settings.step_goal / 3) {
     return;
   }
   int size = vcr - 1000 * vcr / 1414;
@@ -265,15 +274,21 @@ static void draw_steps(GContext* ctx, GRect bounds, int vcr) {
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, bbox, 3, GCornersAll);
 
-  if (steps > STEP_GOAL * 4 / 3) {
+#if BIG
+  if (steps > settings.step_goal * 4 / 3) {
     draw_diamond(ctx, bbox);
-  } else if (steps > STEP_GOAL) {
+  } else if (steps > settings.step_goal) {
     draw_star(ctx, bbox);
-  } else if (steps > STEP_GOAL * 2 / 3) {
+  } else if (steps > settings.step_goal * 2 / 3) {
     draw_shell(ctx, bbox);
   } else {
     draw_acorn(ctx, bbox);
   }
+#else
+  if (steps > settings.step_goal) {
+    draw_star(ctx, bbox);
+  }
+#endif
 }
 
 static void update_layer(Layer* layer, GContext* ctx) {
@@ -286,7 +301,11 @@ static void update_layer(Layer* layer, GContext* ctx) {
   graphics_context_set_fill_color(ctx, settings.color_background);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2;
+#if IS_ROUND
+  GPoint center = grect_center_point(&bounds);
+#else
   GPoint center = GPoint(bounds.origin.x + bounds.size.w / 2, bounds.origin.y + visible_circle_radius + 2);
+#endif
   int hand_length = visible_circle_radius - 6;
   int minute = now->tm_min;
   int minute_deg = 360 * minute / 60;
@@ -323,11 +342,15 @@ static void tick_handler(struct tm* now, TimeUnits units_changed) {
 static void load_settings() {
   default_settings();
   // If we need a new version of settings, check SETTINGS_VERSION_KEY and migrate
+  int loaded_version = persist_read_int(SETTINGS_VERSION_KEY);
   persist_read_data(SETTINGS_KEY, &settings, sizeof(settings));
+  if (loaded_version == 1) {
+    settings.step_goal = DEFAULT_STEP_GOAL;
+  }
 }
 
 static void save_settings() {
-  persist_write_int(SETTINGS_VERSION_KEY, 1);
+  persist_write_int(SETTINGS_VERSION_KEY, 2);
   persist_write_data(SETTINGS_KEY, &settings, sizeof(settings));
 }
 
@@ -343,6 +366,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_color_month_date      ))) settings.color_month_date       = GColorFromHEX(t->value->int32);
   if ((t = dict_find(iter, MESSAGE_KEY_color_battery_inside  ))) settings.color_battery_inside   = GColorFromHEX(t->value->int32);
   if ((t = dict_find(iter, MESSAGE_KEY_color_battery_outside ))) settings.color_battery_outside  = GColorFromHEX(t->value->int32);
+  if ((t = dict_find(iter, MESSAGE_KEY_step_goal             ))) settings.step_goal              = atoi(t->value->cstring);
   save_settings();
   // Update the display based on new settings
   layer_mark_dirty(window_get_root_layer(s_window));
@@ -352,6 +376,7 @@ static void init(void) {
 #if BIG
   s_font_lg = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_LATO_52));
 #endif
+  shapes_init();
   load_settings();
   app_message_register_inbox_received(inbox_received_handler);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
@@ -368,6 +393,7 @@ static void init(void) {
 static void deinit(void) {
   if (s_window) window_destroy(s_window);
   if (s_font_lg) fonts_unload_custom_font(s_font_lg);
+  shapes_deinit();
 }
 
 int main(void) {

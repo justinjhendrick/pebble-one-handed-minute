@@ -1,6 +1,9 @@
 #ifndef SHAPES_H
 #define SHAPES_H
 
+void shapes_init();
+void shapes_deinit();
+
 void draw_arrow(GContext* ctx, int w, int h, int rotation, GPoint offset);
 void draw_diamond(GContext* ctx, GRect bbox);
 void draw_star(GContext* ctx, GRect bbox);

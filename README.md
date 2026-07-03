@@ -20,6 +20,8 @@ https://apps.repebble.com/one-handed-minute_67f68f5cc6733d0009b2916d
 
 ![screenshot](screenshot_emery.png)
 
+![screenshot](screenshot_emery2.png)
+
 ### Gabbro
 
 ![screenshot](screenshot_gabbro.png)

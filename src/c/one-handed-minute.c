@@ -9,6 +9,7 @@
 #define BIG (PBL_DISPLAY_WIDTH >= 200)
 #define HAS_COLOR (PBL_IF_COLOR_ELSE(true, false))
 #define IS_ROUND (PBL_IF_ROUND_ELSE(true, false))
+#define IS_RECT (PBL_IF_ROUND_ELSE(false, true))
 #define SETTINGS_RESERVED_BYTES (36)
 #define DEFAULT_STEP_GOAL (0)
 
@@ -26,8 +27,10 @@ typedef struct ClaySettings {
   GColor color_month_date;
   GColor color_battery_inside;
   GColor color_battery_outside;
-  // Above this line was on settings v1
+  // Above this line was in settings v1
   int step_goal;
+  // Above this line was in settings v2
+
   uint8_t reserved[SETTINGS_RESERVED_BYTES]; // for later growth
 } __attribute__((__packed__)) ClaySettings;
 
@@ -297,7 +300,9 @@ static void update_layer(Layer* layer, GContext* ctx) {
   if (DEBUG_TIME) {
     fast_forward_time(now);
   }
+  GRect full_bounds = layer_get_bounds(layer);
   GRect bounds = layer_get_unobstructed_bounds(layer);
+  bool timeline_quick_view = (bounds.size.h < full_bounds.size.h - 1);
   graphics_context_set_fill_color(ctx, settings.color_background);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   int visible_circle_radius = min(bounds.size.h, bounds.size.w) / 2;
@@ -313,7 +318,7 @@ static void update_layer(Layer* layer, GContext* ctx) {
   draw_ticks(ctx, center, visible_circle_radius);
   draw_hour(ctx, center, minute_deg, visible_circle_radius, now);
   draw_hand(ctx, center, minute_deg, hand_length);
-  if (PBL_IF_RECT_ELSE(true, false)) {
+  if (IS_RECT && !timeline_quick_view) {
     draw_date(ctx, bounds, visible_circle_radius, now);
     GPoint batt_top_right = draw_battery(ctx, bounds);
     GPoint bt_top_left = GPoint(batt_top_right.x + 2, batt_top_right.y);

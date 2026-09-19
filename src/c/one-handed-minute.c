@@ -78,11 +78,11 @@ static void draw_ticks(GContext* ctx, GPoint center, int visible_circle_radius) 
     int tick_length = 1;
     if (tick_minute % 15 == 0) {
       graphics_context_set_stroke_color(ctx, settings.color_major_tick);
-      graphics_context_set_stroke_width(ctx, 7);
+      graphics_context_set_stroke_width(ctx, 5);
       tick_length = 2 * visible_circle_radius / 10;
     } else if (tick_minute % 5 == 0) {
       graphics_context_set_stroke_color(ctx, settings.color_middle_tick);
-      graphics_context_set_stroke_width(ctx, 5);
+      graphics_context_set_stroke_width(ctx, 3);
       tick_length = 2 * visible_circle_radius / 10;
     } else {
       graphics_context_set_stroke_color(ctx, settings.color_minor_tick);
@@ -91,11 +91,6 @@ static void draw_ticks(GContext* ctx, GPoint center, int visible_circle_radius) 
     }
     GPoint minute_tick_inner = cartesian_from_polar(center, visible_circle_radius - tick_length, tick_deg);
     graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
-    if (tick_minute % 15 == 0) {
-      graphics_context_set_stroke_color(ctx, settings.color_background);
-      graphics_context_set_stroke_width(ctx, 1);
-      graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
-    }
   }
 }
 

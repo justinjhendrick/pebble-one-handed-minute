@@ -10,16 +10,17 @@
 #define HAS_COLOR (PBL_IF_COLOR_ELSE(true, false))
 #define IS_ROUND (PBL_IF_ROUND_ELSE(true, false))
 #define IS_RECT (PBL_IF_ROUND_ELSE(false, true))
-#define SETTINGS_RESERVED_BYTES (36)
+#define SETTINGS_RESERVED_BYTES (35)
 #define DEFAULT_STEP_GOAL (0)
+#define DEFAULT_COLOR_MIDDLE_TICK (GColorWhite)
 
 #define SETTINGS_VERSION_KEY 1
 #define SETTINGS_KEY 2
 
 typedef struct ClaySettings {
   GColor color_background;
-  GColor color_major_tick;
-  GColor color_minor_tick;
+  GColor color_major_tick; // 15m
+  GColor color_minor_tick; // 1m
   GColor color_hand;
   GColor color_hand_inside;
   GColor color_hour;
@@ -30,6 +31,8 @@ typedef struct ClaySettings {
   // Above this line was in settings v1
   int step_goal;
   // Above this line was in settings v2
+  GColor color_middle_tick; // 5m
+  // Above this line was in settings v3
 
   uint8_t reserved[SETTINGS_RESERVED_BYTES]; // for later growth
 } __attribute__((__packed__)) ClaySettings;
@@ -48,6 +51,7 @@ static void default_settings() {
   settings.color_battery_inside = COLOR_FALLBACK(GColorBrightGreen, GColorWhite);
   settings.color_battery_outside = GColorWhite;
   settings.step_goal = DEFAULT_STEP_GOAL;
+  settings.color_middle_tick = DEFAULT_COLOR_MIDDLE_TICK;
 
   for (int i = 0; i < SETTINGS_RESERVED_BYTES; i++) {
     settings.reserved[i] = 0;
@@ -74,11 +78,11 @@ static void draw_ticks(GContext* ctx, GPoint center, int visible_circle_radius) 
     int tick_length = 1;
     if (tick_minute % 15 == 0) {
       graphics_context_set_stroke_color(ctx, settings.color_major_tick);
-      graphics_context_set_stroke_width(ctx, 5);
+      graphics_context_set_stroke_width(ctx, 7);
       tick_length = 2 * visible_circle_radius / 10;
     } else if (tick_minute % 5 == 0) {
-      graphics_context_set_stroke_color(ctx, settings.color_minor_tick);
-      graphics_context_set_stroke_width(ctx, 3);
+      graphics_context_set_stroke_color(ctx, settings.color_middle_tick);
+      graphics_context_set_stroke_width(ctx, 5);
       tick_length = 2 * visible_circle_radius / 10;
     } else {
       graphics_context_set_stroke_color(ctx, settings.color_minor_tick);
@@ -87,6 +91,11 @@ static void draw_ticks(GContext* ctx, GPoint center, int visible_circle_radius) 
     }
     GPoint minute_tick_inner = cartesian_from_polar(center, visible_circle_radius - tick_length, tick_deg);
     graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
+    if (tick_minute % 15 == 0) {
+      graphics_context_set_stroke_color(ctx, settings.color_background);
+      graphics_context_set_stroke_width(ctx, 1);
+      graphics_draw_line(ctx, minute_tick_inner, minute_tick_outer);
+    }
   }
 }
 
@@ -101,7 +110,7 @@ static void draw_hour(GContext* ctx, GPoint center, int minute_deg, int visible_
   GFont hour_font = fonts_get_system_font(FONT_KEY_BITHAM_42_LIGHT);
 #endif
   int inverted_minute_deg = 180 + minute_deg;
-  GPoint hour_bbox_midpoint = cartesian_from_polar(center, visible_circle_radius / 2 - 5, inverted_minute_deg);
+  GPoint hour_bbox_midpoint = cartesian_from_polar(center, visible_circle_radius * 8 / 20, inverted_minute_deg);
   GRect hour_bbox = rect_from_midpoint(hour_bbox_midpoint, hour_bbox_size);
   debug_bbox(ctx, hour_bbox);
   hour_bbox.origin.y -= shift_up;
@@ -160,7 +169,6 @@ static void fill_rect_dither(GContext* ctx, GColor a, GColor b, GRect r) {
 }
 
 static GPoint draw_battery(GContext* ctx, GRect bounds) {
-  BatteryChargeState bcs = battery_state_service_peek();
   int w;
   int h;
   if (bounds.size.h > 200) { // bigger on emery
@@ -175,18 +183,23 @@ static GPoint draw_battery(GContext* ctx, GRect bounds) {
   int lft = bounds.origin.x + 3;
   int rgt = lft + w;
 
-  graphics_context_set_stroke_color(ctx, settings.color_battery_outside);
-  graphics_context_set_stroke_width(ctx, 1);
-  graphics_draw_line(ctx, GPoint(lft, top), GPoint(rgt, top));
-  graphics_draw_line(ctx, GPoint(lft, bot), GPoint(rgt, bot));
-  graphics_draw_line(ctx, GPoint(lft, top), GPoint(lft, bot));
-  graphics_draw_line(ctx, GPoint(rgt, top), GPoint(rgt, bot));
-  graphics_draw_line(ctx, GPoint(lft + 2, top - 1), GPoint(rgt - 2, top - 1));  // like a AAA cap
+  if (!gcolor_equal(settings.color_battery_outside, settings.color_background) ||
+      !gcolor_equal(settings.color_battery_inside, settings.color_background)
+  ) {
+    graphics_context_set_stroke_color(ctx, settings.color_battery_outside);
+    graphics_context_set_stroke_width(ctx, 1);
+    graphics_draw_line(ctx, GPoint(lft, top), GPoint(rgt, top));
+    graphics_draw_line(ctx, GPoint(lft, bot), GPoint(rgt, bot));
+    graphics_draw_line(ctx, GPoint(lft, top), GPoint(lft, bot));
+    graphics_draw_line(ctx, GPoint(rgt, top), GPoint(rgt, bot));
+    graphics_draw_line(ctx, GPoint(lft + 2, top - 1), GPoint(rgt - 2, top - 1));  // like a AAA cap
 
-  graphics_context_set_fill_color(ctx, settings.color_battery_inside);
-  int fill_size = (h - 1) * bcs.charge_percent / 100;
-  GRect fill_area = GRect(lft + 1, bot - fill_size, w - 1, fill_size);
-  fill_rect_dither(ctx, settings.color_battery_inside, settings.color_background, fill_area);
+    graphics_context_set_fill_color(ctx, settings.color_battery_inside);
+    BatteryChargeState bcs = battery_state_service_peek();
+    int fill_size = (h - 1) * bcs.charge_percent / 100;
+    GRect fill_area = GRect(lft + 1, bot - fill_size, w - 1, fill_size);
+    fill_rect_dither(ctx, settings.color_battery_inside, settings.color_background, fill_area);
+  }
   return GPoint(rgt, top - 1);
 }
 
@@ -352,10 +365,13 @@ static void load_settings() {
   if (loaded_version == 1) {
     settings.step_goal = DEFAULT_STEP_GOAL;
   }
+  if (loaded_version == 2) {
+    settings.color_middle_tick = DEFAULT_COLOR_MIDDLE_TICK;
+  }
 }
 
 static void save_settings() {
-  persist_write_int(SETTINGS_VERSION_KEY, 2);
+  persist_write_int(SETTINGS_VERSION_KEY, 3);
   persist_write_data(SETTINGS_KEY, &settings, sizeof(settings));
 }
 
@@ -372,6 +388,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_color_battery_inside  ))) settings.color_battery_inside   = GColorFromHEX(t->value->int32);
   if ((t = dict_find(iter, MESSAGE_KEY_color_battery_outside ))) settings.color_battery_outside  = GColorFromHEX(t->value->int32);
   if ((t = dict_find(iter, MESSAGE_KEY_step_goal             ))) settings.step_goal              = atoi(t->value->cstring);
+  if ((t = dict_find(iter, MESSAGE_KEY_color_middle_tick     ))) settings.color_middle_tick      = GColorFromHEX(t->value->int32);
   save_settings();
   // Update the display based on new settings
   layer_mark_dirty(window_get_root_layer(s_window));

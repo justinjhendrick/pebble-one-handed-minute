@@ -40,11 +40,12 @@
       "color_month_date",
       "color_battery_outside",
       "color_battery_inside",
-      "step_goal"
+      "step_goal",
+      "color_middle_tick"
     ],
     "resources": {
       "media": [
-        {"name": "LATO_52", "file": "fonts/Lato-Regular.ttf", "characterRegex": "[ 0-9]", "type": "font", "targetPlatforms": ["emery", "gabbro"] },
+        {"name": "LATO_52", "file": "fonts/Lato-Bold.ttf", "characterRegex": "[ 0-9]", "type": "font", "targetPlatforms": ["emery", "gabbro"] },
         {"name": "SHELL_IMAGE", "type": "bitmap", "file": "images/shell.png" }
       ]
     }
